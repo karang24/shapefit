@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+.git
+.gitignore
+README.md
+QUICKSTART.md
+FIXES_SUMMARY.md
+IMPLEMENTATION_COMPLETE.md
+*.bat
+*.sh
+.DS_Store
+Thumbs.db
+*.log
