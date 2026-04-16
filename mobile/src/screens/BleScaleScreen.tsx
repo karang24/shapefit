@@ -41,7 +41,10 @@ type ScaleMetrics = {
   bmi?: number;
 };
 
-const TARGET_NAME_HINTS = ['okok', 'gasbord', 'scale', 'cf', 'health'];
+const TARGET_NAME_HINTS = ['okok', 'gasbord', 'gaabor', 'scale', 'cf', 'health'];
+const SCALE_SERVICE_HINTS = ['181d', '181b'];
+const MAX_DISCOVERED_DEVICES = 30;
+const SCAN_TIMEOUT_MS = 45000;
 
 const formatNow = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 
@@ -69,6 +72,18 @@ const u16le = (bytes: number[], offset: number): number => {
   return bytes[offset] | (bytes[offset + 1] << 8);
 };
 
+const normalize = (value?: string | null) => (value || '').trim().toLowerCase();
+
+const looksLikeScaleDevice = (device: Device) => {
+  const normalizedName = normalize(device.name || device.localName);
+  const byName = TARGET_NAME_HINTS.some((hint) => normalizedName.includes(hint));
+  const byService = (device.serviceUUIDs || []).some((uuid) => {
+    const normalizedUuid = normalize(uuid);
+    return SCALE_SERVICE_HINTS.some((hint) => normalizedUuid.includes(hint));
+  });
+  return byName || byService;
+};
+
 const tryParseWeightKg = (bytes: number[]): number | null => {
   if (bytes.length < 2) return null;
   const littleEndianRaw = bytes[0] | (bytes[1] << 8);
@@ -81,6 +96,23 @@ const tryParseWeightKg = (bytes: number[]): number | null => {
   }
   return null;
 };
+
+const parseWeightFromAdvertisement = (device: Device): number | null => {
+  const manufacturerBytes = device.manufacturerData ? base64ToBytes(device.manufacturerData) : [];
+  const fromManufacturer = tryParseWeightKg(manufacturerBytes);
+  if (fromManufacturer) return fromManufacturer;
+
+  const serviceDataValues = Object.values(device.serviceData || {});
+  for (const serviceRaw of serviceDataValues) {
+    const bytes = base64ToBytes(serviceRaw);
+    const parsed = tryParseWeightKg(bytes);
+    if (parsed) return parsed;
+  }
+
+  return null;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const parseWeightScaleMeasurement = (bytes: number[]): ScaleMetrics | null => {
   if (bytes.length < 3) return null;
@@ -255,11 +287,17 @@ const BleScaleScreen: React.FC<Props> = ({ navigation }) => {
     const granted = await requestPermissions();
     if (!granted) return;
 
+    const bleState = await manager.state();
+    if (bleState !== 'PoweredOn') {
+      addLog(`Bluetooth belum siap. State: ${bleState}. Nyalakan Bluetooth lalu coba scan lagi.`);
+      return;
+    }
+
     setDevices([]);
     setScanning(true);
-    addLog('Memulai scan BLE...');
+    addLog('Memulai scan BLE (target + unnamed scale-like device)...');
 
-    manager.startDeviceScan(null, { allowDuplicates: false }, (error, device) => {
+    manager.startDeviceScan(null, { allowDuplicates: true }, (error, device) => {
       if (error) {
         addLog(`Scan error: ${error.message}`);
         stopScan();
@@ -267,24 +305,50 @@ const BleScaleScreen: React.FC<Props> = ({ navigation }) => {
       }
       if (!device) return;
 
-      const rawName = (device.name || device.localName || '').trim();
-      if (!rawName) return;
-      const normalized = rawName.toLowerCase();
-      const isTarget = TARGET_NAME_HINTS.some((hint) => normalized.includes(hint));
+      const isTarget = looksLikeScaleDevice(device);
       if (!isTarget) return;
+
+      const rawName = (device.name || device.localName || '').trim();
+      const displayName = rawName || 'Unnamed BLE Device';
+      const advWeight = parseWeightFromAdvertisement(device);
+      if (advWeight) {
+        setMetrics((prev) => ({ ...prev, weightKg: advWeight }));
+      }
 
       setDevices((prev) => {
         const exists = prev.find((d) => d.id === device.id);
-        if (exists) return prev.map((d) => (d.id === device.id ? { ...d, rssi: device.rssi ?? null, name: rawName } : d));
-        addLog(`Device ditemukan: ${rawName} (${device.id})`);
-        return [...prev, { id: device.id, name: rawName, rssi: device.rssi ?? null }];
+        if (exists) {
+          return prev.map((d) =>
+            d.id === device.id
+              ? {
+                  ...d,
+                  rssi: device.rssi ?? d.rssi,
+                  name: displayName !== 'Unnamed BLE Device' ? displayName : d.name,
+                }
+              : d
+          );
+        }
+
+        const next = [...prev, { id: device.id, name: displayName, rssi: device.rssi ?? null }];
+        const sorted = next.sort((a, b) => (b.rssi ?? -200) - (a.rssi ?? -200)).slice(0, MAX_DISCOVERED_DEVICES);
+        addLog(`Device ditemukan: ${displayName} (${device.id}) RSSI=${device.rssi ?? '-'}`);
+        if (advWeight) {
+          addLog(`Berat terdeteksi dari advertisement: ${advWeight} kg`);
+        }
+        return sorted;
       });
     });
 
     scanTimeoutRef.current = setTimeout(() => {
       stopScan();
-      addLog('Scan selesai (timeout 15 detik).');
-    }, 15000);
+      addLog(`Scan berhenti otomatis setelah ${Math.round(SCAN_TIMEOUT_MS / 1000)} detik (bukan error).`);
+      setDevices((prev) => {
+        if (prev.length === 0) {
+          addLog('Belum ada device target. Dekatkan HP ke timbangan, aktifkan timbangan dengan diinjak, lalu scan lagi.');
+        }
+        return prev;
+      });
+    }, SCAN_TIMEOUT_MS);
   };
 
   const connectToDevice = async (deviceId: string) => {
@@ -295,8 +359,8 @@ const BleScaleScreen: React.FC<Props> = ({ navigation }) => {
     clearMonitorSubscriptions();
     setMetrics({});
 
-    try {
-      addLog(`Menghubungkan ke device ${deviceId}...`);
+    const attemptConnect = async (attempt: number) => {
+      addLog(`Menghubungkan ke device ${deviceId}... (attempt ${attempt})`);
       const connectedDevice = await manager.connectToDevice(deviceId, { autoConnect: false });
       await connectedDevice.discoverAllServicesAndCharacteristics();
       setConnected(connectedDevice);
@@ -351,8 +415,36 @@ const BleScaleScreen: React.FC<Props> = ({ navigation }) => {
         }
       }
       addLog('Monitoring notifiable characteristics dimulai.');
+    };
+
+    try {
+      await manager.cancelDeviceConnection(deviceId).catch(() => null);
+      await attemptConnect(1);
     } catch (error: any) {
-      addLog(`Gagal connect: ${error?.message || String(error)}`);
+      const errorMessage = String(error?.message || error);
+      const lower = errorMessage.toLowerCase();
+      const isTimeout = lower.includes('timed out') || lower.includes('timeout');
+      const isGattTransient = lower.includes('133') || lower.includes('gatt');
+
+      if (isTimeout || isGattTransient) {
+        addLog(`Connect attempt 1 gagal: ${errorMessage}`);
+        addLog('Retry connect sekali lagi...');
+        try {
+          await manager.cancelDeviceConnection(deviceId).catch(() => null);
+          await sleep(1200);
+          await attemptConnect(2);
+          setConnectingId(null);
+          return;
+        } catch (retryError: any) {
+          const retryMessage = String(retryError?.message || retryError);
+          addLog(`Connect attempt 2 gagal: ${retryMessage}`);
+          if (String(retryMessage).toLowerCase().includes('133')) {
+            addLog('Hint: error GATT 133 biasanya transient. Coba pairing dulu di pengaturan Bluetooth Android, lalu ulang scan.');
+          }
+        }
+      } else {
+        addLog(`Gagal connect: ${errorMessage}`);
+      }
       setConnected(null);
     } finally {
       setConnectingId(null);
