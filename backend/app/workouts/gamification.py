@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Dict, Iterable, Optional, Tuple
 
 
@@ -30,6 +31,8 @@ FALLBACK_CATEGORY_BASE_EXP: Dict[str, float] = {
     "kalistenik": 1.25,
     "strongman": 1.95,
 }
+INACTIVITY_WINDOW_DAYS = 30
+INACTIVITY_PENALTY_PER_WINDOW = 500
 
 
 def calculate_workout_exp(base_exp_per_rep: float, weight_kg: float, reps: int, sets: int) -> int:
@@ -77,11 +80,33 @@ def get_rank(total_exp: int) -> Dict[str, Optional[float | int | str]]:
     }
 
 
+def _to_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _calculate_inactivity_penalty(log_rows: list) -> int:
+    if not log_rows:
+        return 0
+
+    timestamps = [_to_utc(item.created_at) for item in log_rows if getattr(item, "created_at", None)]
+    if not timestamps:
+        return 0
+
+    latest_workout_time = max(timestamps)
+    now_utc = datetime.now(timezone.utc)
+    inactive_days = max((now_utc - latest_workout_time).days, 0)
+    inactive_windows = inactive_days // INACTIVITY_WINDOW_DAYS
+    return inactive_windows * INACTIVITY_PENALTY_PER_WINDOW
+
+
 def summarize_gamification(log_rows: Iterable, exercise_lookup: Dict[str, object]) -> dict:
+    logs = list(log_rows)
     total_exp = 0
     per_type: Dict[str, int] = {}
 
-    for workout in log_rows:
+    for workout in logs:
         normalized_name = (workout.exercise or "").strip().lower()
         catalog_item = exercise_lookup.get(normalized_name)
 
@@ -101,10 +126,15 @@ def summarize_gamification(log_rows: Iterable, exercise_lookup: Dict[str, object
         total_exp += exp
         per_type[exercise_type] = per_type.get(exercise_type, 0) + exp
 
-    rank_payload = get_rank(total_exp)
+    inactivity_penalty = _calculate_inactivity_penalty(logs)
+    adjusted_total_exp = max(total_exp - inactivity_penalty, 0)
+
+    rank_payload = get_rank(adjusted_total_exp)
     top_types = sorted(per_type.items(), key=lambda item: item[1], reverse=True)
 
     return {
         **rank_payload,
+        "raw_total_exp": total_exp,
+        "inactivity_penalty": inactivity_penalty,
         "exercise_type_exp": [{"type_key": key, "total_exp": value} for key, value in top_types],
     }
