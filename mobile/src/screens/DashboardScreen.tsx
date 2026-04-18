@@ -35,6 +35,11 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
     sessions_this_week: 0,
     latest_weight: null,
     latest_waist: null,
+    rank: 'F',
+    next_rank: 'E',
+    total_exp: 0,
+    exp_to_next_rank: 500,
+    rank_progress_percent: 0,
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -125,6 +130,30 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       ) : null}
 
       <ProgressCard title="Latihan minggu ini" current={dashboard.sessions_this_week} target={3} />
+
+      <View style={[styles.rankCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.rankTitle, { color: colors.textPrimary }]}>Rank Training</Text>
+        <View style={styles.rankRow}>
+          <Text style={[styles.rankBadge, { color: mode === 'light' ? '#2A86FF' : '#3B9CFF' }]}>Rank {dashboard.rank}</Text>
+          <Text style={[styles.rankExpText, { color: colors.textSecondary }]}>{dashboard.total_exp} EXP</Text>
+        </View>
+        <View style={[styles.rankProgressTrack, { backgroundColor: mode === 'light' ? '#E6ECF4' : '#242B3A' }]}>
+          <View
+            style={[
+              styles.rankProgressFill,
+              {
+                width: `${Math.max(0, Math.min(dashboard.rank_progress_percent, 100))}%`,
+                backgroundColor: mode === 'light' ? '#2A86FF' : '#2BE572',
+              },
+            ]}
+          />
+        </View>
+        <Text style={[styles.rankHint, { color: colors.textSecondary }]}>
+          {dashboard.next_rank
+            ? `${dashboard.exp_to_next_rank} EXP lagi menuju Rank ${dashboard.next_rank}`
+            : 'Rank maksimal tercapai'}
+        </Text>
+      </View>
 
       <View style={styles.metricsRow}>
         <MetricCard
@@ -272,6 +301,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     marginBottom: 24,
+  },
+  rankCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+  },
+  rankTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  rankRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  rankBadge: {
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  rankExpText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  rankProgressTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  rankProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  rankHint: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 20,

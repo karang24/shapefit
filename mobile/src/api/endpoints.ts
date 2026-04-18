@@ -7,6 +7,9 @@ import {
   DashboardSummary,
   WorkoutHistory,
   ExerciseProgress,
+  ExerciseCatalogItem,
+  ExerciseTypeDefinition,
+  WorkoutGamificationSummary,
   CalorieTargetRequest,
   CalorieTargetResponse,
   NutritionDailyUsage,
@@ -86,6 +89,18 @@ export const workoutsApi = {
   },
   getProgress: async (exercise: string) => {
     const response = await apiClient.get<ExerciseProgress>(`/api/workouts/progress/${exercise}`);
+    return response.data;
+  },
+  getExerciseTypes: async () => {
+    const response = await apiClient.get<ExerciseTypeDefinition[]>('/api/workouts/exercise-types');
+    return response.data;
+  },
+  getExerciseCatalog: async () => {
+    const response = await apiClient.get<ExerciseCatalogItem[]>('/api/workouts/exercises');
+    return response.data;
+  },
+  getGamification: async () => {
+    const response = await apiClient.get<WorkoutGamificationSummary>('/api/workouts/gamification');
     return response.data;
   },
 };

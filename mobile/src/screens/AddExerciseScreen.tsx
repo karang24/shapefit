@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { sessionsApi, workoutsApi } from '../api/endpoints';
-import { WorkoutLog } from '../types';
+import { ExerciseCatalogItem, WorkoutLog } from '../types';
 
 type RootStackParamList = {
   AddExercise: { sessionId: number };
@@ -11,20 +11,30 @@ type RootStackParamList = {
 
 type Props = StackScreenProps<RootStackParamList, 'AddExercise'>;
 
+const formatCategory = (category: string) => category.charAt(0).toUpperCase() + category.slice(1);
+
 const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
   const { sessionId } = route.params;
-  const [exercise, setExercise] = useState('');
+  const [selectedExerciseName, setSelectedExerciseName] = useState('');
   const [weight, setWeight] = useState('');
   const [reps, setReps] = useState('');
   const [sets, setSets] = useState('');
   const [currentSessionId, setCurrentSessionId] = useState(sessionId);
   const [sessionExercises, setSessionExercises] = useState<WorkoutLog[]>([]);
+  const [exerciseCatalog, setExerciseCatalog] = useState<ExerciseCatalogItem[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const selectedExercise = useMemo(
+    () => exerciseCatalog.find((item) => item.name === selectedExerciseName) ?? null,
+    [exerciseCatalog, selectedExerciseName]
+  );
 
   useEffect(() => {
     if (sessionId === 0) {
       loadActiveSession();
     }
+    loadExerciseCatalog();
   }, [sessionId]);
 
   const loadActiveSession = async () => {
@@ -37,9 +47,18 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
+  const loadExerciseCatalog = async () => {
+    try {
+      const catalog = await workoutsApi.getExerciseCatalog();
+      setExerciseCatalog(catalog);
+    } catch (error) {
+      console.error('Failed to load exercise catalog', error);
+    }
+  };
+
   const handleAddExercise = async () => {
-    if (!exercise || !weight || !reps || !sets) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!selectedExerciseName || !weight || !reps || !sets) {
+      Alert.alert('Error', 'Please choose exercise and fill all fields');
       return;
     }
 
@@ -47,19 +66,19 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
     try {
       const newExercise = await workoutsApi.add(
         currentSessionId,
-        exercise,
+        selectedExerciseName,
         parseFloat(weight),
         parseInt(reps),
         parseInt(sets)
       );
       setSessionExercises([...sessionExercises, newExercise]);
-      
-      setExercise('');
+
+      setSelectedExerciseName('');
       setWeight('');
       setReps('');
       setSets('');
-      
-      Alert.alert('Success', 'Exercise added successfully!');
+
+      Alert.alert('Exercise Added', `${newExercise.exercise} (${newExercise.exercise_type})\n+${newExercise.exp_earned} EXP`);
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Failed to add exercise');
     } finally {
@@ -75,37 +94,56 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
 
     try {
       await sessionsApi.finish(currentSessionId, 'Workout completed');
-      Alert.alert(
-        'Great job!',
-        'Session finished successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Dashboard'),
-          },
-        ]
-      );
+      Alert.alert('Great job!', 'Session finished successfully!', [
+        {
+          text: 'OK',
+          onPress: () => navigation.navigate('Dashboard'),
+        },
+      ]);
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Failed to finish session');
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <Text style={styles.title}>Add Exercise</Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Exercise name (e.g., Kettlebell Swing)"
-            value={exercise}
-            onChangeText={setExercise}
-            autoCapitalize="words"
-          />
+          <Text style={styles.label}>Exercise (Dropdown)</Text>
+          <TouchableOpacity style={styles.dropdownButton} onPress={() => setDropdownOpen((v) => !v)}>
+            <Text style={[styles.dropdownText, !selectedExerciseName && styles.dropdownPlaceholder]}>
+              {selectedExerciseName || 'Select exercise'}
+            </Text>
+          </TouchableOpacity>
+
+          {dropdownOpen && (
+            <View style={styles.dropdownList}>
+              {exerciseCatalog.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setSelectedExerciseName(item.name);
+                    setDropdownOpen(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemTitle}>{item.name}</Text>
+                  <Text style={styles.dropdownItemMeta}>
+                    {formatCategory(item.category)} | Base {item.base_exp_per_rep} EXP/rep
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {selectedExercise && (
+            <View style={styles.selectedInfoCard}>
+              <Text style={styles.selectedInfoText}>Kategori: {formatCategory(selectedExercise.category)}</Text>
+              <Text style={styles.selectedInfoText}>Base EXP: {selectedExercise.base_exp_per_rep} / rep</Text>
+            </View>
+          )}
 
           <View style={styles.row}>
             <TextInput
@@ -138,12 +176,13 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
           {sessionExercises.length > 0 && (
             <>
               <Text style={styles.sectionTitle}>Current Session</Text>
-              {sessionExercises.map((log, index) => (
+              {sessionExercises.map((log) => (
                 <View key={log.id} style={styles.exerciseItem}>
                   <Text style={styles.exerciseName}>{log.exercise}</Text>
                   <Text style={styles.exerciseDetails}>
-                    {log.weight_kg} kg × {log.reps} reps × {log.sets} sets
+                    {log.weight_kg} kg x {log.reps} reps x {log.sets} sets
                   </Text>
+                  <Text style={styles.expText}>+{log.exp_earned} EXP ({log.exercise_type})</Text>
                 </View>
               ))}
             </>
@@ -178,6 +217,60 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 24,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  dropdownButton: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  dropdownText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  dropdownPlaceholder: {
+    color: '#888',
+  },
+  dropdownList: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e3e3e3',
+    marginBottom: 10,
+    maxHeight: 220,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ededed',
+    backgroundColor: '#fff',
+  },
+  dropdownItemTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#222',
+  },
+  dropdownItemMeta: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#5f6f87',
+  },
+  selectedInfoCard: {
+    backgroundColor: '#EEF6FF',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  selectedInfoText: {
+    fontSize: 13,
+    color: '#174986',
+    fontWeight: '600',
   },
   input: {
     backgroundColor: '#f5f5f5',
@@ -227,6 +320,12 @@ const styles = StyleSheet.create({
   exerciseDetails: {
     fontSize: 14,
     color: '#666',
+  },
+  expText: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#2E7D32',
+    fontWeight: '700',
   },
   finishButton: {
     backgroundColor: '#2196F3',

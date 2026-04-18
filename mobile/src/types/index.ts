@@ -23,6 +23,8 @@ export interface WorkoutLog {
   reps: number;
   sets: number;
   created_at: string;
+  exercise_type: string;
+  exp_earned: number;
 }
 
 export interface BodyMetric {
@@ -38,6 +40,11 @@ export interface DashboardSummary {
   sessions_this_week: number;
   latest_weight: number | null;
   latest_waist: number | null;
+  rank: string;
+  next_rank: string | null;
+  total_exp: number;
+  exp_to_next_rank: number;
+  rank_progress_percent: number;
 }
 
 export interface WorkoutHistoryItem {
@@ -46,6 +53,8 @@ export interface WorkoutHistoryItem {
   weight_kg: number;
   reps: number;
   sets: number;
+  exercise_type: string;
+  exp_earned: number;
 }
 
 export interface ExerciseProgress {
@@ -56,6 +65,34 @@ export interface ExerciseProgress {
 export interface WorkoutHistory {
   workouts: WorkoutHistoryItem[];
   exercise_progress: ExerciseProgress[];
+}
+
+export interface ExerciseTypeDefinition {
+  type_key: string;
+  label: string;
+  base_exp_per_rep: number;
+  description: string;
+}
+
+export interface ExerciseCatalogItem {
+  id: number;
+  name: string;
+  category: string;
+  base_exp_per_rep: number;
+}
+
+export interface ExerciseTypeExp {
+  type_key: string;
+  total_exp: number;
+}
+
+export interface WorkoutGamificationSummary {
+  rank: string;
+  next_rank: string | null;
+  total_exp: number;
+  exp_to_next_rank: number;
+  progress_percent: number;
+  exercise_type_exp: ExerciseTypeExp[];
 }
 
 export type SexType = 'male' | 'female';

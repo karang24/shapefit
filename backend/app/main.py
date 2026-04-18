@@ -17,6 +17,8 @@ from .workouts.models import WorkoutLog
 from .body_metrics.models import BodyMetric
 from .nutrition.models import MealAnalysis
 from .auth.dependencies import get_current_user
+from .workouts.gamification import summarize_gamification
+from .workouts.catalog import get_exercise_lookup
 
 Base.metadata.create_all(bind=engine)
 
@@ -63,11 +65,22 @@ def get_dashboard(current_user: User = Depends(get_current_user), db: Session = 
     
     latest_weight = float(latest_metric.weight_kg) if latest_metric else None
     latest_waist = float(latest_metric.waist_cm) if latest_metric and latest_metric.waist_cm else None
+    workout_rows = db.query(WorkoutLog).join(
+        SessionModel, WorkoutLog.session_id == SessionModel.id
+    ).filter(
+        SessionModel.user_id == current_user.id
+    ).all()
+    gamification = summarize_gamification(workout_rows, get_exercise_lookup(db))
     
     return DashboardSummary(
         sessions_this_week=sessions_this_week,
         latest_weight=latest_weight,
-        latest_waist=latest_waist
+        latest_waist=latest_waist,
+        rank=gamification["rank"],
+        next_rank=gamification["next_rank"],
+        total_exp=gamification["total_exp"],
+        exp_to_next_rank=gamification["exp_to_next_rank"],
+        rank_progress_percent=gamification["progress_percent"],
     )
 
 

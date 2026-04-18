@@ -30,3 +30,8 @@ class DashboardSummary(BaseModel):
     sessions_this_week: int
     latest_weight: Optional[float]
     latest_waist: Optional[float]
+    rank: str
+    next_rank: Optional[str]
+    total_exp: int
+    exp_to_next_rank: int
+    rank_progress_percent: float

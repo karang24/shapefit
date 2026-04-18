@@ -47,12 +47,11 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
     const previous = weights[0].weight;
     const change = latest - previous;
     if (change > 0) {
-      return `${previous}kg → ${latest}kg (+${change.toFixed(1)}kg)`;
+      return `${previous}kg -> ${latest}kg (+${change.toFixed(1)}kg)`;
     } else if (change < 0) {
-      return `${previous}kg → ${latest}kg (${change.toFixed(1)}kg)`;
-    } else {
-      return `${latest}kg (no change)`;
+      return `${previous}kg -> ${latest}kg (${change.toFixed(1)}kg)`;
     }
+    return `${latest}kg (no change)`;
   };
 
   if (loading || !history) {
@@ -69,7 +68,7 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
 
         <Text style={styles.sectionTitle}>Exercise Progress</Text>
         {history.exercise_progress.map((progress, index) => (
-          <View key={index} style={styles.progressItem}>
+          <View key={`${progress.exercise}-${index}`} style={styles.progressItem}>
             <Text style={styles.exerciseName}>{progress.exercise}</Text>
             <Text style={styles.progressText}>{getProgressText(progress.weights)}</Text>
           </View>
@@ -77,18 +76,19 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
 
         <Text style={styles.sectionTitle}>Recent Workouts</Text>
         {history.workouts.map((workout, index) => (
-          <View key={index} style={styles.workoutItem}>
+          <View key={`${workout.exercise}-${workout.date}-${index}`} style={styles.workoutItem}>
             <Text style={styles.workoutDate}>{workout.date}</Text>
             <Text style={styles.workoutExercise}>{workout.exercise}</Text>
             <Text style={styles.workoutDetails}>
-              {workout.weight_kg} kg × {workout.reps} reps × {workout.sets} sets
+              {workout.weight_kg} kg x {workout.reps} reps x {workout.sets} sets
             </Text>
+            <Text style={styles.workoutExp}>+{workout.exp_earned} EXP ({workout.exercise_type})</Text>
           </View>
         ))}
 
         <View style={styles.footer}>
           <Text style={styles.footerText} onPress={() => navigation.goBack()}>
-            ← Back to Dashboard
+            {'<- Back to Dashboard'}
           </Text>
         </View>
       </View>
@@ -156,6 +156,12 @@ const styles = StyleSheet.create({
   workoutDetails: {
     fontSize: 14,
     color: '#666',
+  },
+  workoutExp: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#2E7D32',
+    fontWeight: '700',
   },
   footer: {
     padding: 24,
