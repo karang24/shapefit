@@ -1,20 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// API Configuration
-const API_CONFIG = {
-  // For development with Android emulator
-  // emulator: 'http://10.0.2.2:8000',
-  // simulator: 'http://localhost:8000',
-  // device: 'http://192.168.1.4:8000',
-  // production: 'https://your-api-domain.com/api',
-
-  development: 'http://192.168.1.4:8000',
-  production: 'http://192.168.1.4:8000i',
-};
-
-// Use EXPO_PUBLIC_API_BASE_URL when provided, otherwise default to local network dev URL.
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? API_CONFIG.development;
+// Force API to VPS to avoid stale env/fallback issues during local Android testing.
+const API_BASE_URL = 'http://31.97.222.194:8008';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -30,6 +18,7 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('[API Request]', `${config.baseURL ?? ''}${config.url ?? ''}`);
     return config;
   },
   (error) => {
@@ -38,5 +27,18 @@ apiClient.interceptors.request.use(
   }
 );
 
+apiClient.interceptors.response.use(
+  (response) => {
+    console.log('[API Response]', response.status, `${response.config.baseURL ?? ''}${response.config.url ?? ''}`);
+    return response;
+  },
+  (error) => {
+    const status = error?.response?.status;
+    const fullUrl = `${error?.config?.baseURL ?? ''}${error?.config?.url ?? ''}`;
+    console.error('[API Response Error]', status, fullUrl, error?.response?.data);
+    return Promise.reject(error);
+  }
+);
+
 export default apiClient;
-export { API_CONFIG, API_BASE_URL };
+export { API_BASE_URL };

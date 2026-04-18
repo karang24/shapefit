@@ -11,10 +11,15 @@ type RootStackParamList = {
 
 type Props = StackScreenProps<RootStackParamList, 'AddExercise'>;
 
-const formatCategory = (category: string) => category.charAt(0).toUpperCase() + category.slice(1);
+const formatCategory = (category: string) => {
+  if (category === 'kalistenik') return 'Kalistenik';
+  if (category === 'kettlebell') return 'Kettlebell';
+  return category.charAt(0).toUpperCase() + category.slice(1);
+};
 
 const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
   const { sessionId } = route.params;
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedExerciseName, setSelectedExerciseName] = useState('');
   const [weight, setWeight] = useState('');
   const [reps, setReps] = useState('');
@@ -22,8 +27,19 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
   const [currentSessionId, setCurrentSessionId] = useState(sessionId);
   const [sessionExercises, setSessionExercises] = useState<WorkoutLog[]>([]);
   const [exerciseCatalog, setExerciseCatalog] = useState<ExerciseCatalogItem[]>([]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [exerciseDropdownOpen, setExerciseDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const categories = useMemo(() => {
+    const unique = Array.from(new Set(exerciseCatalog.map((item) => item.category)));
+    return unique.sort((a, b) => a.localeCompare(b));
+  }, [exerciseCatalog]);
+
+  const filteredExercises = useMemo(
+    () => exerciseCatalog.filter((item) => item.category === selectedCategory),
+    [exerciseCatalog, selectedCategory]
+  );
 
   const selectedExercise = useMemo(
     () => exerciseCatalog.find((item) => item.name === selectedExerciseName) ?? null,
@@ -57,8 +73,8 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const handleAddExercise = async () => {
-    if (!selectedExerciseName || !weight || !reps || !sets) {
-      Alert.alert('Error', 'Please choose exercise and fill all fields');
+    if (!selectedCategory || !selectedExerciseName || !weight || !reps || !sets) {
+      Alert.alert('Error', 'Please choose category, exercise, and fill all fields');
       return;
     }
 
@@ -73,6 +89,7 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
       );
       setSessionExercises([...sessionExercises, newExercise]);
 
+      setSelectedCategory('');
       setSelectedExerciseName('');
       setWeight('');
       setReps('');
@@ -107,34 +124,74 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
           <Text style={styles.title}>Add Exercise</Text>
 
-          <Text style={styles.label}>Exercise (Dropdown)</Text>
-          <TouchableOpacity style={styles.dropdownButton} onPress={() => setDropdownOpen((v) => !v)}>
+          <Text style={styles.label}>Category</Text>
+          <TouchableOpacity
+            style={styles.dropdownButton}
+            onPress={() => {
+              setCategoryDropdownOpen((v) => !v);
+              setExerciseDropdownOpen(false);
+            }}
+          >
+            <Text style={[styles.dropdownText, !selectedCategory && styles.dropdownPlaceholder]}>
+              {selectedCategory ? formatCategory(selectedCategory) : 'Select category'}
+            </Text>
+          </TouchableOpacity>
+
+          {categoryDropdownOpen && (
+            <View style={styles.dropdownListWrap}>
+              <ScrollView style={styles.dropdownList} nestedScrollEnabled>
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setSelectedCategory(category);
+                      setSelectedExerciseName('');
+                      setCategoryDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownItemTitle}>{formatCategory(category)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <Text style={styles.label}>Exercise</Text>
+          <TouchableOpacity
+            style={[styles.dropdownButton, !selectedCategory && styles.dropdownButtonDisabled]}
+            onPress={() => {
+              if (!selectedCategory) return;
+              setExerciseDropdownOpen((v) => !v);
+              setCategoryDropdownOpen(false);
+            }}
+          >
             <Text style={[styles.dropdownText, !selectedExerciseName && styles.dropdownPlaceholder]}>
               {selectedExerciseName || 'Select exercise'}
             </Text>
           </TouchableOpacity>
 
-          {dropdownOpen && (
-            <View style={styles.dropdownList}>
-              {exerciseCatalog.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setSelectedExerciseName(item.name);
-                    setDropdownOpen(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemTitle}>{item.name}</Text>
-                  <Text style={styles.dropdownItemMeta}>
-                    {formatCategory(item.category)} | Base {item.base_exp_per_rep} EXP/rep
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          {exerciseDropdownOpen && (
+            <View style={styles.dropdownListWrap}>
+              <ScrollView style={styles.dropdownList} nestedScrollEnabled>
+                {filteredExercises.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setSelectedExerciseName(item.name);
+                      setExerciseDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownItemTitle}>{item.name}</Text>
+                    <Text style={styles.dropdownItemMeta}>Base {item.base_exp_per_rep} EXP/rep</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
 
@@ -230,6 +287,9 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 8,
   },
+  dropdownButtonDisabled: {
+    opacity: 0.55,
+  },
   dropdownText: {
     fontSize: 16,
     color: '#333',
@@ -237,13 +297,16 @@ const styles = StyleSheet.create({
   dropdownPlaceholder: {
     color: '#888',
   },
-  dropdownList: {
+  dropdownListWrap: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e3e3e3',
-    marginBottom: 10,
-    maxHeight: 220,
+    marginBottom: 12,
     overflow: 'hidden',
+  },
+  dropdownList: {
+    maxHeight: 220,
+    backgroundColor: '#fff',
   },
   dropdownItem: {
     padding: 12,

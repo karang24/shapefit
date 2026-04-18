@@ -3,15 +3,25 @@ from __future__ import annotations
 from typing import Dict, Iterable, Optional, Tuple
 
 
-RANK_THRESHOLDS: Tuple[Tuple[str, int], ...] = (
-    ("F", 0),
-    ("E", 500),
-    ("D", 1500),
-    ("C", 3500),
-    ("B", 7000),
-    ("A", 12000),
-    ("S", 20000),
-)
+RANK_ORDER: Tuple[str, ...] = ("F", "E", "D", "C", "B", "A", "S")
+BASE_EXP_NEXT_RANK = 500
+RANK_GROWTH_FACTOR = 5
+
+
+def _build_rank_thresholds() -> Tuple[Tuple[str, int], ...]:
+    thresholds: list[Tuple[str, int]] = [("F", 0)]
+    total_exp = 0
+    exp_to_next = BASE_EXP_NEXT_RANK
+
+    for rank in RANK_ORDER[1:]:
+        total_exp += exp_to_next
+        thresholds.append((rank, total_exp))
+        exp_to_next *= RANK_GROWTH_FACTOR
+
+    return tuple(thresholds)
+
+
+RANK_THRESHOLDS: Tuple[Tuple[str, int], ...] = _build_rank_thresholds()
 
 FALLBACK_CATEGORY_BASE_EXP: Dict[str, float] = {
     "kettlebell": 1.7,
@@ -27,7 +37,7 @@ def calculate_workout_exp(base_exp_per_rep: float, weight_kg: float, reps: int, 
     safe_reps = max(int(reps), 0)
     safe_sets = max(int(sets), 0)
     total_reps = safe_reps * safe_sets
-    weight_multiplier = 1.0 + (safe_weight / 20.0)
+    weight_multiplier = 1.0 + (safe_weight / 12.0)
     exp = int(round(total_reps * float(base_exp_per_rep) * weight_multiplier))
     return max(exp, 1)
 
