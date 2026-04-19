@@ -3,9 +3,11 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvo
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { progressionApi } from '../api/endpoints';
 
 type RootStackParamList = {
   Auth: undefined;
+  GoalSetup: undefined;
   Dashboard: undefined;
 };
 
@@ -37,7 +39,8 @@ const AuthScreen: React.FC<Props> = ({ navigation }) => {
       } else {
         await register(name, email, password);
       }
-      navigation.replace('Dashboard');
+      const goalState = await progressionApi.getGoalProfile();
+      navigation.replace(goalState.has_profile ? 'Dashboard' : 'GoalSetup');
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Authentication failed');
     } finally {

@@ -101,7 +101,7 @@ def _calculate_inactivity_penalty(log_rows: list) -> int:
     return inactive_windows * INACTIVITY_PENALTY_PER_WINDOW
 
 
-def summarize_gamification(log_rows: Iterable, exercise_lookup: Dict[str, object]) -> dict:
+def summarize_gamification(log_rows: Iterable, exercise_lookup: Dict[str, object], extra_exp: int = 0) -> dict:
     logs = list(log_rows)
     total_exp = 0
     per_type: Dict[str, int] = {}
@@ -127,7 +127,8 @@ def summarize_gamification(log_rows: Iterable, exercise_lookup: Dict[str, object
         per_type[exercise_type] = per_type.get(exercise_type, 0) + exp
 
     inactivity_penalty = _calculate_inactivity_penalty(logs)
-    adjusted_total_exp = max(total_exp - inactivity_penalty, 0)
+    mission_bonus_exp = max(int(extra_exp), 0)
+    adjusted_total_exp = max(total_exp - inactivity_penalty, 0) + mission_bonus_exp
 
     rank_payload = get_rank(adjusted_total_exp)
     top_types = sorted(per_type.items(), key=lambda item: item[1], reverse=True)
@@ -136,5 +137,6 @@ def summarize_gamification(log_rows: Iterable, exercise_lookup: Dict[str, object
         **rank_payload,
         "raw_total_exp": total_exp,
         "inactivity_penalty": inactivity_penalty,
+        "mission_bonus_exp": mission_bonus_exp,
         "exercise_type_exp": [{"type_key": key, "total_exp": value} for key, value in top_types],
     }

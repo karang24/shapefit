@@ -10,6 +10,9 @@ import {
   ExerciseCatalogItem,
   ExerciseTypeDefinition,
   WorkoutGamificationSummary,
+  FitnessGoalType,
+  GoalProfileState,
+  WeeklyMissionSummary,
   CalorieTargetRequest,
   CalorieTargetResponse,
   NutritionDailyUsage,
@@ -61,6 +64,10 @@ export const sessionsApi = {
   },
   getActive: async () => {
     const response = await apiClient.get<Session>('/api/sessions/active');
+    return response.data;
+  },
+  startSelf: async () => {
+    const response = await apiClient.post<Session>('/api/sessions/start-self');
     return response.data;
   },
   finish: async (sessionId: number, notes?: string) => {
@@ -142,6 +149,23 @@ export const nutritionApi = {
   },
   analyzeMealImage: async (payload: AnalyzeMealImageRequest) => {
     const response = await apiClient.post<AnalyzeMealImageResponse>('/api/nutrition/analyze-image', payload);
+    return response.data;
+  },
+};
+
+export const progressionApi = {
+  getGoalProfile: async () => {
+    const response = await apiClient.get<GoalProfileState>('/api/progression/goal');
+    return response.data;
+  },
+  updateGoalProfile: async (goalType: FitnessGoalType) => {
+    const response = await apiClient.put<GoalProfileState>('/api/progression/goal', {
+      goal_type: goalType,
+    });
+    return response.data;
+  },
+  getCurrentWeeklyMission: async () => {
+    const response = await apiClient.get<WeeklyMissionSummary>('/api/progression/missions/current');
     return response.data;
   },
 };

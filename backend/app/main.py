@@ -11,14 +11,17 @@ from .sessions.router import router as sessions_router
 from .workouts.router import router as workouts_router
 from .body_metrics.router import router as body_metrics_router
 from .nutrition.router import router as nutrition_router
+from .progression.router import router as progression_router
 from .auth.models import User
 from .sessions.models import Session as SessionModel
 from .workouts.models import WorkoutLog
 from .body_metrics.models import BodyMetric
 from .nutrition.models import MealAnalysis
+from .progression.models import UserGoalProfile, WeeklyMissionReward
 from .auth.dependencies import get_current_user
 from .workouts.gamification import summarize_gamification
 from .workouts.catalog import get_exercise_lookup
+from .progression.service import get_goal_profile, generate_weekly_mission_summary, upsert_weekly_reward, get_total_mission_bonus_exp
 
 Base.metadata.create_all(bind=engine)
 
@@ -37,6 +40,7 @@ app.include_router(sessions_router)
 app.include_router(workouts_router)
 app.include_router(body_metrics_router)
 app.include_router(nutrition_router)
+app.include_router(progression_router)
 
 
 @app.get("/")
@@ -65,12 +69,23 @@ def get_dashboard(current_user: User = Depends(get_current_user), db: Session = 
     
     latest_weight = float(latest_metric.weight_kg) if latest_metric else None
     latest_waist = float(latest_metric.waist_cm) if latest_metric and latest_metric.waist_cm else None
+    mission_bonus_exp = 0
+    goal_profile = get_goal_profile(db, current_user.id)
+    if goal_profile:
+        mission = generate_weekly_mission_summary(db, current_user.id, goal_profile.goal_type)
+        upsert_weekly_reward(db, current_user.id, mission)
+        mission_bonus_exp = get_total_mission_bonus_exp(db, current_user.id)
+
     workout_rows = db.query(WorkoutLog).join(
         SessionModel, WorkoutLog.session_id == SessionModel.id
     ).filter(
         SessionModel.user_id == current_user.id
     ).all()
-    gamification = summarize_gamification(workout_rows, get_exercise_lookup(db))
+    gamification = summarize_gamification(
+        workout_rows,
+        get_exercise_lookup(db),
+        extra_exp=mission_bonus_exp,
+    )
     
     return DashboardSummary(
         sessions_this_week=sessions_this_week,

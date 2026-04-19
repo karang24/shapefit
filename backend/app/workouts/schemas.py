@@ -70,4 +70,7 @@ class WorkoutGamificationSummary(BaseModel):
     total_exp: int
     exp_to_next_rank: int
     progress_percent: float
+    raw_total_exp: int = 0
+    inactivity_penalty: int = 0
+    mission_bonus_exp: int = 0
     exercise_type_exp: List[ExerciseTypeExp]

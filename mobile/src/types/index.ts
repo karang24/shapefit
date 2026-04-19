@@ -95,6 +95,34 @@ export interface WorkoutGamificationSummary {
   exercise_type_exp: ExerciseTypeExp[];
 }
 
+export type FitnessGoalType = 'weight_loss' | 'fat_loss' | 'muscle_gain' | 'recomposition';
+
+export interface GoalProfileState {
+  has_profile: boolean;
+  goal_type: FitnessGoalType | null;
+  updated_at: string | null;
+}
+
+export interface WeeklyMissionItem {
+  item_key: string;
+  title: string;
+  target: number;
+  progress: number;
+  completed: boolean;
+}
+
+export interface WeeklyMissionSummary {
+  week_start: string;
+  week_end: string;
+  goal_type: FitnessGoalType;
+  checklist: WeeklyMissionItem[];
+  completed_items: number;
+  total_items: number;
+  checklist_bonus_exp: number;
+  all_completed_bonus_exp: number;
+  total_bonus_exp: number;
+}
+
 export type SexType = 'male' | 'female';
 export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
 export type GoalType = 'deficit' | 'maintenance' | 'surplus';

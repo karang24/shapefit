@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 from datetime import datetime
 from ..database import get_db
 from ..auth.models import User
@@ -11,8 +10,19 @@ from .schemas import SessionCreate, Session, SessionStart, SessionUpdate
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
+def _get_active_session(db: Session, user_id: int):
+    return db.query(SessionModel).filter(
+        SessionModel.user_id == user_id,
+        SessionModel.end_time.is_(None)
+    ).first()
+
+
 @router.post("/start", response_model=Session)
 def start_session(qr_data: SessionStart, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    active_session = _get_active_session(db, current_user.id)
+    if active_session:
+        return active_session
+
     coach = db.query(User).filter(User.role == "coach").first()
     if not coach:
         raise HTTPException(
@@ -30,12 +40,25 @@ def start_session(qr_data: SessionStart, current_user: User = Depends(get_curren
     return db_session
 
 
+@router.post("/start-self", response_model=Session)
+def start_self_session(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    active_session = _get_active_session(db, current_user.id)
+    if active_session:
+        return active_session
+
+    db_session = SessionModel(
+        user_id=current_user.id,
+        coach_id=None
+    )
+    db.add(db_session)
+    db.commit()
+    db.refresh(db_session)
+    return db_session
+
+
 @router.get("/active", response_model=Session)
 def get_active_session(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    active_session = db.query(SessionModel).filter(
-        SessionModel.user_id == current_user.id,
-        SessionModel.end_time.is_(None)
-    ).first()
+    active_session = _get_active_session(db, current_user.id)
     
     if not active_session:
         raise HTTPException(

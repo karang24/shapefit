@@ -21,6 +21,12 @@ from .gamification import (
     summarize_gamification,
 )
 from .catalog import get_exercise_lookup, list_categories, list_exercises
+from ..progression.service import (
+    generate_weekly_mission_summary,
+    get_goal_profile,
+    get_total_mission_bonus_exp,
+    upsert_weekly_reward,
+)
 
 router = APIRouter(prefix="/api/workouts", tags=["workouts"])
 
@@ -148,7 +154,16 @@ def get_workout_gamification(current_user: User = Depends(get_current_user), db:
         .filter(SessionModel.user_id == current_user.id)
     )
     workout_rows = [row[0] for row in db.execute(stmt).all()]
-    return WorkoutGamificationSummary(**summarize_gamification(workout_rows, get_exercise_lookup(db)))
+    mission_bonus_exp = 0
+    goal_profile = get_goal_profile(db, current_user.id)
+    if goal_profile:
+        mission = generate_weekly_mission_summary(db, current_user.id, goal_profile.goal_type)
+        upsert_weekly_reward(db, current_user.id, mission)
+        mission_bonus_exp = get_total_mission_bonus_exp(db, current_user.id)
+
+    return WorkoutGamificationSummary(
+        **summarize_gamification(workout_rows, get_exercise_lookup(db), extra_exp=mission_bonus_exp)
+    )
 
 
 @router.get("/progress/{exercise}", response_model=ExerciseProgress)

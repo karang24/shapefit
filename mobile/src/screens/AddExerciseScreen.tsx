@@ -58,8 +58,13 @@ const AddExerciseScreen: React.FC<Props> = ({ navigation, route }) => {
       const session = await sessionsApi.getActive();
       setCurrentSessionId(session.id);
     } catch (error) {
-      Alert.alert('Error', 'No active session found. Please scan QR code first.');
-      navigation.goBack();
+      try {
+        const selfSession = await sessionsApi.startSelf();
+        setCurrentSessionId(selfSession.id);
+      } catch (selfSessionError) {
+        Alert.alert('Error', 'No active session found and failed to create self session.');
+        navigation.goBack();
+      }
     }
   };
 
